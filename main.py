@@ -24,24 +24,20 @@ class Stem:
             self.position = self.prev.position + 1
             self.base_width = self.prev.base_width
 
-            self.width = self.get_stem_width()
+            self.width = self.get_stem()
             self.is_top = self.position == self.total_height
             self.is_ready = True
 
 
-    def get_stem_width(self):
+    def get_stem(self):
         if self.total_height == 0:
             return self.base_width
         percent = min_percent + (max_percent - min_percent) * (1 - float(self.position) / self.total_height)
         stem_width = int(percent / 100 * self.base_width)
         return stem_width
     
-    
-    def render(self):
-        if self.is_ready:
-            # Render tree top if this is the topmost stem
-            if self.is_top:
-                # Render fluffy cloud top with random shape variation on both sides
+    def get_top(self):
+        # Render fluffy cloud top with random shape variation on both sides
                 max_top_width = self.base_width + self.base_width * 4
                 layers = max(math.log2(self.total_height), self.total_height // 2)
                 
@@ -57,6 +53,14 @@ class Stem:
                     # Add random offset to left side as well
                     left_offset = random.randint(-2, 2)
                     offset = screen_offset + (self.base_width - size) // 2 + left_offset
+                    return offset, size
+
+    def render(self):
+        if self.is_ready:
+            # Render tree top if this is the topmost stem
+            if self.is_top:
+    
+                    offset, size = self.get_top()
                     print(" " * offset + "#" * size)
             
             prev = self.prev if self.prev else self
@@ -72,8 +76,10 @@ class Root(Stem): # for the lowest stem. the role is to initiate the core values
         self.total_height = total_height
         self.base_width = base_width
         self.position = position
-        self.width = self.get_stem_width()
+        self.width = self.get_stem()
         self.is_ready = True
+
+# functions to manage tree growth
 def add_stem(prev_stem):
     new_stem = Stem(prev=prev_stem)
     prev_stem.next = new_stem

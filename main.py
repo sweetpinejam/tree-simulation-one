@@ -1,162 +1,197 @@
-# Simplified version of the Wartorned Spourt Project
 import random
 import math
 import os
+import time
 
+# ======================
+# Global config
+# ======================
 min_percent = 65.0
 max_percent = 100.0
 screen_offset = 40
-occupied_left = [] # used to track occupied left positions for shoots as we're using shell rendering # for now try left first as its harder
 
-# class Shoot: still need updating. to much work for 29/1/26. practicing work-life balance
-#     def __init__(self):
-#             self.postion = 0
-#             self.side = None # left or right
-#             self.size = 0
-#             self.record = [0] # evens is to grow outwards, odds is to grow upwards
 
-#     def grow(self):
-#         grow_outward = random.random() < 0.6 # 60% chance to grow outwards
-#         if grow_outward:
-#             self.record[-1] += 1
-#         else:
-#             self.record.append(1)
+# ======================
+# Shoot system
+# ======================
+class Shoot:
+    """
+    A shoot grows in layers.
+    Each layer can grow outward or upward.
+    Same shoot_id = same branch identity.
+    """
+    def __init__(self, shoot_id, side):
+        self.id = shoot_id
+        self.side = side  # "left" or "right"
+        self.layers = []  # list of {"out": int, "up": int}
 
-class Stem: # core class representing each stem segment # only render in this class
-    def __init__(self,prev=None):
-        self.position = 0 
-        self.total_height = 0 # for updating when theres complete connection
+    def grow(self):
+        if not self.layers:
+            self.layers.append({"out": 0, "up": 0})
+
+        grow_outward = random.random() < 0.6
+        if grow_outward:
+            self.layers[-1]["out"] += 1
+        else:
+            self.layers.append({"out": 0, "up": 1})
+
+
+# ======================
+# Stem system
+# ======================
+class Stem:
+    def __init__(self, prev=None):
+        self.position = 0
+        self.total_height = 0
         self.base_width = 0
-        self.width = 0 # for update when theres complete connection
-        self.prev = prev # core attribute to be updated
-        self.next = None # core attribute to be updated
+        self.width = 0
+
+        self.prev = prev
+        self.next = None
+
         self.is_top = False
         self.is_ready = False
+
+        self.shoots = {}  # shoot_id -> Shoot
+
+    def add_shoot(self, shoot_id=None):
+        if shoot_id is None:
+            shoot_id = random.randint(1000, 9999)
+        side = random.choice(["left", "right"])
+        self.shoots[shoot_id] = Shoot(shoot_id, side)
 
     def update_state(self):
         if self.prev:
             self.total_height = self.prev.total_height
             self.position = self.prev.position + 1
             self.base_width = self.prev.base_width
-
             self.width = self.get_stem()
             self.is_top = self.position == self.total_height
             self.is_ready = True
 
-
     def get_stem(self):
         if self.total_height == 0:
             return self.base_width
-        percent = min_percent + (max_percent - min_percent) * (1 - float(self.position) / self.total_height)
-        stem_width = int(percent / 100 * self.base_width)
-        return stem_width
-    
-    def get_top(self):
-        # Render fluffy cloud top with random shape variation on both sides
-                max_top_width = self.base_width + self.base_width * 4
-                layers = max(math.log2(self.total_height), self.total_height // 2)
-                
-                for layer in range(layers):
-                    # Create fluffier cloud with smoother expansion curve + randomness
-                    progress = layer / layers
-                    base_expansion = int((max_top_width - self.base_width) * (1 - (progress - 0.5) ** 2 * 4))
-                    # Add random variation to make cloud more organic
-                    random_variation = random.randint(-self.base_width // 3, self.base_width // 3)
-                    expansion = base_expansion + random_variation
-                    size = self.base_width + expansion
-                    
-                    # Add random offset to left side as well
-                    left_offset = random.randint(-2, 2)
-                    offset = screen_offset + (self.base_width - size) // 2 + left_offset
-                    return offset, size
+        percent = min_percent + (max_percent - min_percent) * (
+            1 - self.position / self.total_height
+        )
+        return max(1, int(percent / 100 * self.base_width))
 
     def render(self):
-        if self.is_ready:
-            # Render tree top if this is the topmost stem
-            if self.is_top:
-    
-                    offset, size = self.get_top()
-                    print(" " * offset + "#" * size)
-            
-            prev = self.prev if self.prev else self
-            offset = screen_offset + (prev.base_width - self.width) // 2
-            print(" " * offset + "*" * self.width)
+        if not self.is_ready:
+            return
 
-        else:
-            print("The tree isn't initialized yet.")
+        prev = self.prev if self.prev else self
+        offset = screen_offset + (prev.base_width - self.width) // 2
+        print(" " * offset + "*" * self.width)
 
-class Root(Stem): # for the lowest stem. the role is to initiate the core values and link that to the linked stems
-    def __init__(self, prev=None, total_height=10, base_width=5, position=0):
-        super().__init__(prev)
+        # Render shoots attached to this stem
+        for shoot in self.shoots.values():
+            direction = -1 if shoot.side == "left" else 1
+            for layer in shoot.layers:
+                shoot_offset = offset + direction * layer["out"]
+                print(" " * shoot_offset + "-")
+
+
+# ======================
+# Root
+# ======================
+class Root(Stem):
+    def __init__(self, total_height=10, base_width=5):
+        super().__init__(None)
         self.total_height = total_height
         self.base_width = base_width
-        self.position = position
+        self.position = 0
         self.width = self.get_stem()
         self.is_ready = True
 
-# functions to manage tree growth
+
+# ======================
+# Tree Top
+# ======================
+class TreeTop:
+    def __init__(self, base_width, total_height):
+        self.base_width = base_width
+        self.total_height = total_height
+
+    def render(self):
+        max_top_width = self.base_width * 5
+        layers = max(2, int(math.log2(self.total_height + 1)))
+
+        for layer in range(layers):
+            progress = layer / layers
+            expansion = int((max_top_width - self.base_width) *
+                            (1 - (progress - 0.5) ** 2 * 4))
+            size = max(self.base_width, self.base_width + expansion)
+            offset = screen_offset + (self.base_width - size) // 2
+            print(" " * offset + "#" * size)
+
+
+# ======================
+# Tree utilities
+# ======================
 def add_stem(prev_stem):
     new_stem = Stem(prev=prev_stem)
     prev_stem.next = new_stem
     new_stem.update_state()
     return new_stem
 
-def increment_tree_height(root_stem):
-    """Increment total_height for the entire tree and recalculate all stems"""
-    root_stem.total_height += 1
-    root_stem.base_width += 1  # Optionally adjust base width if desired
-    current_stem = root_stem
-    while current_stem:
-        current_stem.update_state()
-        current_stem = current_stem.next
 
-def remove_stem(stem):
-    if stem.prev:
-        stem.prev.next = None
-    stem.prev = None
-    return stem
+def increment_tree_height(root):
+    root.total_height += 1
+    root.base_width += 1
 
-def prepare_tree(root_stem):
-    current_stem = root_stem
-    while current_stem:
-        current_stem.update_state()
-        current_stem = current_stem.next
+    current = root
+    while current:
+        current.update_state()
+        current = current.next
 
+
+def render_tree(root):
+    # find top
+    current = root
+    while current.next:
+        current = current.next
+
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+    TreeTop(root.base_width, root.total_height).render()
+
+    while current:
+        current.render()
+        current = current.prev
+
+
+# ======================
+# MAIN
+# ======================
 if __name__ == "__main__":
-    # Base tree parameters
-    total_height = 20
-    base_width = 5
-    root = Root(position=0, total_height=total_height, base_width=base_width)
-    current_stem = root
+    random.seed()
 
-    for pos in range(1, total_height + 1):
-        new_stem = Stem(prev=current_stem)
-        current_stem.next = new_stem
-        current_stem = new_stem # Done base construction of the tree
+    root = Root(total_height=10, base_width=5)
+    current = root
 
-    # Render the tree from last to first
-    current_stem = current_stem  # This is now the last stem
-    while current_stem:
-        current_stem.render()
-        current_stem = current_stem.prev  # Move to the previous stem
+    # initial vertical construction
+    for _ in range(root.total_height):
+        current = add_stem(current)
 
-    # Try to reuse the objects to make the tree actually grow
-    # main loop
-    for growth in range(8):
-        os.system('cls' if os.name == 'nt' else 'clear')
-        # Find the last stem
-        last_stem = root
-        while last_stem and last_stem.next:
-            last_stem = last_stem.next
-        
-        # Add a new stem and increment the tree height
-        new_stem = add_stem(last_stem)
+    # growth loop
+    for step in range(12):
+        # grow vertical
+        last = root
+        while last.next:
+            last = last.next
+        add_stem(last)
         increment_tree_height(root)
 
-        # Render the tree again
-        current_stem = new_stem
-        while current_stem:
-            current_stem.render()
-            current_stem = current_stem.prev
+        # random shoot growth
+        walker = root
+        while walker:
+            if random.random() < 0.3:
+                if not walker.shoots:
+                    walker.add_shoot()
+                random.choice(list(walker.shoots.values())).grow()
+            walker = walker.next
 
-        input("Press Enter to grow the tree further...")
+        render_tree(root)
+        time.sleep(0.8)

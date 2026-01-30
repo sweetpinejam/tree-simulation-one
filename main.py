@@ -6,10 +6,25 @@ import os
 min_percent = 65.0
 max_percent = 100.0
 screen_offset = 40
+occupied_left = [] # used to track occupied left positions for shoots as we're using shell rendering # for now try left first as its harder
 
-class Stem:
+# class Shoot: still need updating. to much work for 29/1/26. practicing work-life balance
+#     def __init__(self):
+#             self.postion = 0
+#             self.side = None # left or right
+#             self.size = 0
+#             self.record = [0] # evens is to grow outwards, odds is to grow upwards
+
+#     def grow(self):
+#         grow_outward = random.random() < 0.6 # 60% chance to grow outwards
+#         if grow_outward:
+#             self.record[-1] += 1
+#         else:
+#             self.record.append(1)
+
+class Stem: # core class representing each stem segment # only render in this class
     def __init__(self,prev=None):
-        self.position = 0 # might change
+        self.position = 0 
         self.total_height = 0 # for updating when theres complete connection
         self.base_width = 0
         self.width = 0 # for update when theres complete connection
@@ -126,7 +141,8 @@ if __name__ == "__main__":
         current_stem = current_stem.prev  # Move to the previous stem
 
     # Try to reuse the objects to make the tree actually grow
-    for growth in range(20):
+    # main loop
+    for growth in range(8):
         os.system('cls' if os.name == 'nt' else 'clear')
         # Find the last stem
         last_stem = root
